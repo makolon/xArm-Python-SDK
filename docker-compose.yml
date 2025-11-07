@@ -1,0 +1,62 @@
+x-default-xarm-volumes: &default-xarm-volumes
+  - type: bind
+    source: /usr/share/nvidia/nvoptix.bin
+    target: /usr/share/nvidia/nvoptix.bin
+    read_only: true
+  - type: bind
+    source: /tmp/.X11-unix
+    target: /tmp/.X11-unix
+  - type: bind
+    source: /etc/localtime
+    target: /etc/localtime
+    read_only: true
+  - type: bind
+    source: ./
+    target: /workspace/xArm-Python-SDK
+
+x-default-xarm-environment: &default-xarm-environment
+  - OMNI_KIT_ALLOW_ROOT=1
+  - DISPLAY
+  - TERM
+  - QT_X11_NO_MITSHM=1
+  - MESA_GL_VERSION_OVERRIDE
+
+x-default-xarm-deploy: &default-xarm-deploy
+  resources:
+    reservations:
+      devices:
+        - driver: nvidia
+          count: all
+          capabilities: [ gpu ]
+
+services:
+  # This service is the vnc desktop image
+  desktop:
+    image: ghcr.io/matsuolab/virtual_desktop:latest
+    runtime: nvidia
+    environment: *default-xarm-environment
+    ports:
+      - "${WEB_PORT:-6080}:6080"
+    volumes:
+      - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
+    security_opt:
+      - seccomp:unconfined
+    deploy: *default-xarm-deploy
+
+  xarm-sdk:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    image: xarm-python-sdk
+    depends_on:
+      - desktop
+    shm_size: '16gb'
+    environment: *default-xarm-environment
+    volumes: *default-xarm-volumes
+    network_mode: host
+    deploy: *default-xarm-deploy
+    working_dir: /workspace/xArm-Python-SDK
+    # This is the entrypoint for the container
+    entrypoint: ["bash"]
+    stdin_open: true
+    tty: true
